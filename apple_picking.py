@@ -25,7 +25,7 @@ import sys
 
 ROOT = os.path.dirname(os.path.realpath(__file__))
 
-class ApplePicking:
+class ApplePicking(object):
 
     DEFAULT_CONFIGS = {
         'ANN': {
@@ -41,9 +41,16 @@ class ApplePicking:
 
     CACHED_DATA = None
 
-    def __init__(self, network_type, window_size=None, smoothing_window = 1, use_force=True,
+    def __init__(self, network_type, window_size=None, smoothing_window = 1, inputs = 'jfpo',
                  train_dir='training_data', test_dir='testing_data', model_folder='models'):
+        """
 
+        :param network_type: A string for a valid network to train
+        :param window_size: An integer, or will assume the network's default value
+        :param smoothing_window: Rolling window for forces
+        :param inputs: A string containing the characters j, f, p, or o. Corresponds to the model inputs being the joint
+            states, forces, manipulator position, and manipulator orientation.
+        """
         self.model = None
 
         assert network_type in self.DEFAULT_CONFIGS
@@ -51,7 +58,7 @@ class ApplePicking:
         self.train_dir = os.path.join(ROOT, train_dir)
         self.model_dir = os.path.join(ROOT, model_folder)
         self.test_dir = os.path.join(ROOT, test_dir)
-        self.model_name = '{}_ws{}_smooth{}{}.h5'.format(network_type, window_size, smoothing_window, '_noforce' if not use_force else '')
+
 
         self.window_size = window_size or self.DEFAULT_CONFIGS[network_type]['window']
         self.smoothing_window = smoothing_window
@@ -60,11 +67,25 @@ class ApplePicking:
                       '/joint_states.wrist_2_joint', '/joint_states.wrist_3_joint']
         force_cols = ['/manipulator_wrench.fx', '/manipulator_wrench.fy', '/manipulator_wrench.fz',
                       '/manipulator_wrench.tx', '/manipulator_wrench.ty', '/manipulator_wrench.tz']
+        manip_pos_cols = ['/manipulator_pose.{}'.format(c) for c in ['x', 'y', 'z']]
+        manip_orientation_cols = ['/manipulator_pose.{}'.format(c) for c in ['rx', 'ry', 'rz', 'rw']]
 
-        if use_force:
-            self.INPUT_COLS = force_cols + joint_cols
-        else:
-            self.INPUT_COLS = joint_cols
+        self.INPUT_COLS = []
+        inputs = ''.join(sorted(inputs))
+        if 'f' in inputs:
+            self.INPUT_COLS.extend(force_cols)
+
+        if 'j' in inputs:
+            self.INPUT_COLS.extend(joint_cols)
+
+        if 'p' in inputs:
+            self.INPUT_COLS.extend(manip_pos_cols)
+
+        if 'o' in inputs:
+            self.INPUT_COLS.extend(manip_orientation_cols)
+
+        suffix = '' if inputs == 'fj' else '_{}'.format(inputs)     # Legacy hack for old models
+        self.model_name = '{}_ws{}_smooth{}{}.h5'.format(network_type, self.window_size, smoothing_window, suffix)
 
         self.OUTPUT_COLS = ['/ground_truth.x', '/ground_truth.y', '/ground_truth.z']
 
@@ -294,14 +315,20 @@ class ApplePicking:
         print(np.shape(orientation_error))
         return orientation_error
 
-def train_all():
+def train_all(override=False):
     from itertools import product
     networks = ['ANN', 'Conv1D', 'LSTM']
     smoothing_factors = [1, 3]
 
     for network, smooth in product(networks, smoothing_factors):
         model = ApplePicking(network, smoothing_window=smooth)
-        model.train_network(0.10)
+        try:
+            if override:
+                raise OSError
+            model.load_from_cache()
+            continue
+        except OSError:
+            model.train_network(0.90, n_epoch=1000)
 
 
 
@@ -312,6 +339,7 @@ if __name__ == '__main__':
     mode = 'train'
     network = 'Conv1D'      # ANN, Conv1D, LSTM
     smooth = 1
+    inputs = 'fj'
     
     if len(sys.argv) > 1:
         mode = sys.argv[1]
@@ -322,14 +350,17 @@ if __name__ == '__main__':
     if len(sys.argv) > 3:
         smooth = int(sys.argv[3])
 
+    if len(sys.argv) > 4:
+        inputs = int(sys.argv[4])
+
     if mode == 'trainall':
-        train_all()
+        train_all(override=False)
         sys.exit(0)
 
-    apple_model = ApplePicking(network, smoothing_window=smooth)
+    apple_model = ApplePicking(network, smoothing_window=smooth, inputs=inputs)
 
     if mode == 'train':
-        apple_model.train_network(0.10, n_epoch=1000)
+        apple_model.train_network(0.90, n_epoch=1000)
 
     elif mode == 'predict':
 
