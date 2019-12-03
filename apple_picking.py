@@ -41,7 +41,7 @@ class ApplePicking(object):
 
     CACHED_DATA = None
 
-    def __init__(self, network_type, window_size=None, smoothing_window = 1, inputs = 'jfpo',
+    def __init__(self, network_type, window_size=None, smoothing_window=1, inputs = 'jfpo',
                  train_dir='training_data', test_dir='testing_data', model_folder='models'):
         """
 
@@ -84,7 +84,7 @@ class ApplePicking(object):
         if 'o' in inputs:
             self.INPUT_COLS.extend(manip_orientation_cols)
 
-        suffix = '' if inputs == 'fj' else '_{}'.format(inputs)     # Legacy hack for old models
+        suffix = '_{}'.format(inputs)    
         self.model_name = '{}_ws{}_smooth{}{}.h5'.format(network_type, self.window_size, smoothing_window, suffix)
 
         self.OUTPUT_COLS = ['/ground_truth.x', '/ground_truth.y', '/ground_truth.z']
@@ -339,8 +339,9 @@ if __name__ == '__main__':
     mode = 'train'
     network = 'Conv1D'      # ANN, Conv1D, LSTM
     smooth = 1
-    inputs = 'fj'
-    
+    inputs = 'fj'           # fj, 
+    epochs = 750
+
     if len(sys.argv) > 1:
         mode = sys.argv[1]
 
@@ -360,7 +361,7 @@ if __name__ == '__main__':
     apple_model = ApplePicking(network, smoothing_window=smooth, inputs=inputs)
 
     if mode == 'train':
-        apple_model.train_network(0.90, n_epoch=1000)
+        apple_model.train_network(0.90, n_epoch=epochs)
 
     elif mode == 'predict':
 
@@ -387,32 +388,19 @@ if __name__ == '__main__':
 
         plt.boxplot(errors, labels=labels)
 
-        plt.title('Orientation Error in degrees', fontsize=35)
-        plt.xlabel("Time Steps (0.1s)", fontsize=25)
+        plt.title('Orientation Error vs Data', fontsize=35)
+        plt.xlabel("Data", fontsize=25)
         plt.ylabel("Orrientation Error (deg)", fontsize=25)
         plt.show()
         # plt.savefig(output_base.format(data_label.lower(), label.lower()))
         
         # Plotting individual X,Y,Z components
-        for idx, label in [(0, 'X'), (1, 'Y'), (2, 'Z')]:
-            plt.clf()
-            plt.plot(outputs[:, idx], label=label, color='r')
-            plt.plot(predictions[:, idx], label='{} (pred)'.format(label), color='g')
-            plt.legend()
-            plt.title('{} Data - {} coord'.format(data_label, label))
+        # for idx, label in [(0, 'X'), (1, 'Y'), (2, 'Z')]:
+        #     plt.clf()
+        #     plt.plot(outputs[:, idx], label=label, color='r')
+        #     plt.plot(predictions[:, idx], label='{} (pred)'.format(label), color='g')
+        #     plt.legend()
+        #     plt.title('{} Data - {} coord'.format(data_label, label))
             # plt.savefig(output_base.format(data_label.lower(), label.lower()))
             # plt.show()
 
-        # for data_label, dataset in [['Training', random.choice(apple_picking_obj.train)], ['Validation', random.choice(apple_picking_obj.test)]]:
-        #     # Test a data set
-        #     inputs, outputs = apple_picking_obj.train
-        #     predictions = apple_picking_obj.predict_network(model_name, inputs)
-
-        #     for idx, label in [(0, 'X'), (1, 'Y'), (2, 'Z')]:
-        #         plt.clf()
-        #         plt.plot(outputs[:, idx], label=label, color='r')
-        #         plt.plot(predictions[:, idx], label='{} (pred)'.format(label), color='g')
-        #         plt.legend()
-        #         plt.title('{} Data - {} coord'.format(data_label, label))
-        #         plt.show()
-        #         plt.savefig(output_base.format(data_label.lower(), label.lower()))
