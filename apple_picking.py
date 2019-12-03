@@ -91,17 +91,18 @@ class ApplePicking:
         df = df.iloc[1:].reset_index(drop=True)
         return df
 
-    def format_data(self, df):
+    def format_data(self, df, skip_output=False):
         n_df = len(df) - self.window_size
         X = []
         Y = []
         for i in range(0, n_df):
             seq_X = df.iloc[i: i+self.window_size]
-            seq_Y = seq_X.iloc[-1]
             x = seq_X[self.INPUT_COLS].values
-            y = seq_Y[self.OUTPUT_COLS].values
             X.append(x)
-            Y.append(y)
+            if not skip_output:
+                seq_Y = seq_X.iloc[-1]
+                y = seq_Y[self.OUTPUT_COLS].values
+                Y.append(y)
         return X, Y
 
     def smooth_data(self, df):
@@ -113,24 +114,34 @@ class ApplePicking:
         df = df.dropna().reset_index(drop=True)
         return df
 
+    def process_df(self, df, skip_output=False):
+
+        if skip_output:
+            cols = self.INPUT_COLS
+        else:
+            cols = self.INPUT_COLS + self.OUTPUT_COLS
+
+        df = df[cols].copy()
+        df = self.adjust_force_data(df)
+        mode_col = '/mode./mode'
+        if mode_col in df:
+            df = df[df[mode_col] == 3]
+
+        if self.smoothing_window > 1:
+            df = self.smooth_data(df)  # Smoothing using moving average filter
+
+        x_inputs, y_inputs = self.format_data(df, skip_output=skip_output)
+        if skip_output:
+            return x_inputs
+        return x_inputs, y_inputs
+
     def get_data(self, files_list):
         X_data = []
         Y_data = []
-        mode_col = '/mode./mode'
         for file in files_list:
-            temp_df = pd.read_csv(file)
-            temp_df = self.adjust_force_data(temp_df)
-            
-            # Taking only the mode 3 columns
-            temp_df = temp_df.loc[temp_df[mode_col] == 3]
-            temp_df = temp_df.dropna().reset_index(drop=True)
-
-            if self.smoothing_window > 1:
-                temp_df = self.smooth_data(temp_df) # Smoothing using moving average filter
-
-            temp_X, temp_Y = self.format_data(temp_df)
-            X_data = X_data + temp_X
-            Y_data = Y_data + temp_Y
+            x_inputs, y_inputs = self.process_df(pd.read_csv(file))
+            X_data.extend(x_inputs)
+            Y_data.extend(y_inputs)
 
         X_data = np.array(X_data, dtype=np.float64)
         Y_data = np.array(Y_data, dtype=np.float64)
