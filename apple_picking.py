@@ -241,6 +241,41 @@ class ApplePicking(object):
         print(model.summary())
         return model
 
+    def plot_naive_estimate(self):
+        all_files = [file for file in glob.glob(os.path.join(self.train_dir, "*.csv"))]
+        force_data = []
+        force_cols = ['/manipulator_wrench.fx', '/manipulator_wrench.fy', '/manipulator_wrench.fz']
+        ground_truth_data = []
+        ground_truth_cols = ['/ground_truth.x', '/ground_truth.y', '/ground_truth.z']
+
+        for file in all_files:    
+            df = pd.read_csv(file)
+            df = self.adjust_force_data(df)
+
+            mode_col = '/mode./mode' # Taking only the mode 3 columns
+            df = df.loc[df[mode_col] == 3]
+            df = df.dropna().reset_index(drop=True)
+
+            force = df[force_cols].values
+            force_data.extend(force)
+
+            ground_truth = df[ground_truth_cols].values
+            ground_truth_data.extend(ground_truth)
+
+        force_data = np.array(force_data, dtype=np.float64)
+        ground_truth_data = np.array(ground_truth_data, dtype=np.float64)
+
+        angular_error = self.orientation_error(ground_truth_data, force_data)
+
+        # Plot the naive estiamte graph
+        plt.clf()
+        plt.boxplot(angular_error, labels=['Force Data'])
+        plt.title("Angular Error b/w Force Data and Ground Truth", fontsize=35)
+        # plt.xlabel("Data", fontsize=25)
+        plt.ylabel("Angular Error (deg)", fontsize=30)
+        plt.xticks(size=25)
+        plt.show()
+
     def train_network(self, val_split, n_epoch=1000, clear_tmp=True):
         feature_dim = len(self.INPUT_COLS)
         output_dim = len(self.OUTPUT_COLS)
@@ -330,7 +365,7 @@ if __name__ == '__main__':
 
     mode = 'train'
     network = 'Conv1D'      # ANN, Conv1D, LSTM
-    smooth = 1
+    smooth = 3
     inputs = 'fj'           # f, j, o, p 
     epochs = 350
 
@@ -399,3 +434,6 @@ if __name__ == '__main__':
             # plt.savefig(output_base.format(data_label.lower(), label.lower()))
             # plt.show()
 
+    elif mode == 'naive':
+        print("Naive Mode...")
+        apple_model.plot_naive_estimate()
