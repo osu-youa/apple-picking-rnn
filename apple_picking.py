@@ -74,7 +74,6 @@ class ApplePicking:
         if load_data:
             self.train, self.validation = self.load_all_data()
 
-
     def add_force_mag_data(self, row):
         fx = row['/wrench.fx']
         fy = row['/wrench.fy']
@@ -233,8 +232,10 @@ class ApplePicking:
         (train_inputs, train_labels) = self.train
         (val_inputs, val_labels) = self.validation
 
-        if self.network_type == 'ANN':
+        print (train_inputs.shape, train_labels.shape)
+        print (val_inputs.shape, val_labels.shape)
 
+        if self.network_type == 'ANN':
             train_inputs = train_inputs.reshape(-1, feature_dim)
             val_inputs = val_inputs.reshape(-1, feature_dim)
             print (train_inputs.shape, val_inputs.shape)
@@ -284,10 +285,9 @@ if __name__ == '__main__':
     # Call, e.g. python apple_picking.py train ANN 3
 
     mode = 'train'
-    network = 'ANN'      # ANN, Conv1D, LSTM
+    network = 'Conv1D'      # ANN, Conv1D, LSTM
     smooth = 1
-    window_size = 5
-
+    
     if len(sys.argv) > 1:
         mode = sys.argv[1]
 
@@ -296,6 +296,15 @@ if __name__ == '__main__':
 
     if len(sys.argv) > 3:
         smooth = int(sys.argv[3])
+
+    if network == 'ANN':
+        window_size = 1
+    elif network == 'Conv1D':
+        window_size = 10
+    elif network == 'LSTM':
+        window_size = 5
+    else:
+        raise ValueError("Invalid Network Name")
 
     apple_model = ApplePicking(network, window_size=window_size, smoothing_window=smooth)
 
@@ -307,8 +316,6 @@ if __name__ == '__main__':
         apple_model.load_from_cache(load_data=True)
 
         output_base = os.path.join(ROOT, 'output_{}_{}.png')
-
-
 
         # Plotting the error in the orientation
         plt.clf()
