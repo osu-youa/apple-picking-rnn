@@ -351,7 +351,7 @@ if __name__ == '__main__':
         smooth = int(sys.argv[3])
 
     if len(sys.argv) > 4:
-        inputs = int(sys.argv[4])
+        inputs = sys.argv[4]
 
     if mode == 'trainall':
         train_all(override=False)
