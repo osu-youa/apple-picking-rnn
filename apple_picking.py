@@ -19,6 +19,7 @@ from copy import deepcopy
 import math
 import matplotlib
 import matplotlib.pyplot as plt
+from matplotlib import rcParams
 
 import os
 import sys
@@ -58,7 +59,6 @@ class ApplePicking(object):
         self.train_dir = os.path.join(ROOT, train_dir)
         self.model_dir = os.path.join(ROOT, model_folder)
         self.test_dir = os.path.join(ROOT, test_dir)
-
 
         self.window_size = window_size or self.DEFAULT_CONFIGS[network_type]['window']
         self.smoothing_window = smoothing_window
@@ -100,7 +100,7 @@ class ApplePicking(object):
 
     def load_from_cache(self, load_data=False):
         self.model = keras.models.load_model(self.model_path)
-        # Metadata for testing/validation data
+        # Metadata for training/validation data
         with open(self.model_path.replace('.h5', '.pickle'), 'rb') as fh:
             metadata = pickle.load(fh)
 
@@ -108,13 +108,6 @@ class ApplePicking(object):
         self.validation_files = [os.path.join(self.train_dir, os.path.split(path)[-1]) for path in metadata['validation']]
         if load_data:
             self.train, self.validation = self.load_all_data()
-
-    def add_force_mag_data(self, row):
-        fx = row['/wrench.fx']
-        fy = row['/wrench.fy']
-        fz = row['/wrench.fz']
-        f_mag = math.sqrt(fx**2 + fy**2 + fz**2)
-        return f_mag
 
     def adjust_force_data(self, df):
         force_cols = ['/manipulator_wrench.fx', '/manipulator_wrench.fy', '/manipulator_wrench.fz', '/manipulator_wrench.tx', '/manipulator_wrench.ty', '/manipulator_wrench.tz']
@@ -155,11 +148,11 @@ class ApplePicking(object):
         else:
             cols = self.INPUT_COLS + self.OUTPUT_COLS
 
-        df = df[cols].copy()
         df = self.adjust_force_data(df)
-        mode_col = '/mode./mode'
-        if mode_col in df:
-            df = df[df[mode_col] == 3]
+
+        mode_col = '/mode./mode' # Taking only the mode 3 columns
+        df = df.loc[df[mode_col] == 3]
+        df = df.dropna().reset_index(drop=True)
 
         if self.smoothing_window > 1:
             df = self.smooth_data(df)  # Smoothing using moving average filter
@@ -167,6 +160,7 @@ class ApplePicking(object):
         x_inputs, y_inputs = self.format_data(df, skip_output=skip_output)
         if skip_output:
             return x_inputs
+
         return x_inputs, y_inputs
 
     def get_data(self, files_list):
@@ -195,11 +189,9 @@ class ApplePicking(object):
         
         train = self.get_data(self.train_files)
         validation = self.get_data(self.validation_files)
-
         return train, validation
 
     def load_test_data(self):
-
         test_folder = os.path.join(ROOT, self.test_dir)
         test_files = [file for file in glob.glob(os.path.join(test_folder, "*.csv"))]
         test_X, test_Y = self.get_data(test_files)
@@ -220,7 +212,8 @@ class ApplePicking(object):
 
         model.add(Flatten())
         model.add(Dense(output_dim, activation='linear'))
-        model.compile(loss='mae', optimizer="adam", metrics=['mae', 'accuracy'])
+        adam = keras.optimizers.Adam(learning_rate=0.0005) #default = 0.001
+        model.compile(loss='mae', optimizer=adam, metrics=['mae', 'accuracy'])
         print(model.summary())
         return model
 
@@ -230,7 +223,8 @@ class ApplePicking(object):
         # model.add(LSTM(hidden_neurons, return_sequences=True))
         model.add(LSTM(32))
         model.add(Dense(output_dim, activation='linear'))
-        model.compile(loss='mae', optimizer="adam", metrics=['mae', 'accuracy'])
+        adam = keras.optimizers.Adam(learning_rate=0.0005) #default = 0.001
+        model.compile(loss='mae', optimizer=adam, metrics=['mae', 'accuracy'])
         print(model.summary())
         model.save(model_path)
         return model
@@ -242,7 +236,8 @@ class ApplePicking(object):
         model.add(Dense(64, activation='relu'))
         model.add(Dropout(0.2))
         model.add(Dense(output_dim, activation='linear'))
-        model.compile(loss='mae', optimizer="adam", metrics=['mae', 'accuracy'])
+        adam = keras.optimizers.Adam(learning_rate=0.0005) #default = 0.001
+        model.compile(loss='mae', optimizer=adam, metrics=['mae', 'accuracy'])
         print(model.summary())
         return model
 
@@ -312,7 +307,6 @@ class ApplePicking(object):
             radian = np.arccos(np.clip(np.dot(vec_1, vec_2), -1.0, 1.0))
             theta = (180.0/math.pi)*radian
             orientation_error.append(theta)
-        print(np.shape(orientation_error))
         return orientation_error
 
 def train_all(override=False):
@@ -330,8 +324,6 @@ def train_all(override=False):
         except OSError:
             model.train_network(0.90, n_epoch=1000)
 
-
-
 if __name__ == '__main__':
 
     # Call, e.g. python apple_picking.py train ANN 3
@@ -339,8 +331,8 @@ if __name__ == '__main__':
     mode = 'train'
     network = 'Conv1D'      # ANN, Conv1D, LSTM
     smooth = 1
-    inputs = 'fj'           # fj, 
-    epochs = 750
+    inputs = 'fj'           # f, j, o, p 
+    epochs = 350
 
     if len(sys.argv) > 1:
         mode = sys.argv[1]
@@ -365,12 +357,10 @@ if __name__ == '__main__':
 
     elif mode == 'predict':
 
+        plt_title = "Angular Error Analysis " + network + " " + inputs.upper() + ' Smooth:' + str(smooth) 
         apple_model.load_from_cache(load_data=True)
-
         output_base = os.path.join(ROOT, 'output_{}_{}.png')
 
-        # Plotting the error in the orientation
-        plt.clf()
         labels = []
         errors = []
         for label, dataset in [['Training', apple_model.train],
@@ -378,6 +368,7 @@ if __name__ == '__main__':
                                ['Testing', apple_model.load_test_data()]]:
 
             inputs, outputs = dataset
+            print (inputs.shape, outputs.shape)
             inputs, outputs = shuffle(inputs, outputs, random_state=0)
             predictions = apple_model.predict_network(inputs)
             orientation_error = apple_model.orientation_error(outputs, predictions)
@@ -385,12 +376,14 @@ if __name__ == '__main__':
 
             labels.append(label)
             errors.append(orientation_error)
-
+        
+        # Plotting the error in the orientation
+        plt.clf()
         plt.boxplot(errors, labels=labels)
-
-        plt.title('Orientation Error vs Data', fontsize=35)
-        plt.xlabel("Data", fontsize=25)
-        plt.ylabel("Orrientation Error (deg)", fontsize=25)
+        plt.title(plt_title, fontsize=35)
+        # plt.xlabel("Data", fontsize=25)
+        plt.ylabel("Angular Error (deg)", fontsize=30)
+        plt.xticks(size=25)
         plt.show()
         # plt.savefig(output_base.format(data_label.lower(), label.lower()))
         
