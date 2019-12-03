@@ -370,6 +370,8 @@ if __name__ == '__main__':
             inputs, outputs = dataset
             print (inputs.shape, outputs.shape)
             inputs, outputs = shuffle(inputs, outputs, random_state=0)
+            if network =='ANN':
+                inputs = inputs.reshape(inputs.shape[0], inputs.shape[2])
             predictions = apple_model.predict_network(inputs)
             orientation_error = apple_model.orientation_error(outputs, predictions)
             orientation_arr = np.array(orientation_error)
