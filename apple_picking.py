@@ -14,7 +14,7 @@ import random
 import numpy as np
 import pandas as pd 
 PANDAS_VERSION = int(pd.__version__.split('.')[1])
-
+from copy import deepcopy
 
 import math
 import matplotlib
@@ -27,19 +27,33 @@ ROOT = os.path.dirname(os.path.realpath(__file__))
 
 class ApplePicking:
 
-    def __init__(self, network_type, window_size, smoothing_window = 1, use_force=True,
-                 train_dir='training_data', test_dir='testing_data', model_folder='models'):
+    DEFAULT_CONFIGS = {
+        'ANN': {
+            'window': 1,
+        },
+        'Conv1D': {
+            'window': 10,
+        },
+        'LSTM': {
+            'window': 5,
+        }
+    }
 
+    CACHED_DATA = None
+
+    def __init__(self, network_type, window_size=None, smoothing_window = 1, use_force=True,
+                 train_dir='training_data', test_dir='testing_data', model_folder='models'):
 
         self.model = None
 
+        assert network_type in self.DEFAULT_CONFIGS
         self.network_type = network_type
         self.train_dir = os.path.join(ROOT, train_dir)
         self.model_dir = os.path.join(ROOT, model_folder)
         self.test_dir = os.path.join(ROOT, test_dir)
         self.model_name = '{}_ws{}_smooth{}{}.h5'.format(network_type, window_size, smoothing_window, '_noforce' if not use_force else '')
 
-        self.window_size = window_size
+        self.window_size = window_size or self.DEFAULT_CONFIGS[network_type]['window']
         self.smoothing_window = smoothing_window
 
         joint_cols = ['/joint_states.shoulder_lift_joint', '/joint_states.elbow_joint', '/joint_states.wrist_1_joint',
@@ -280,6 +294,17 @@ class ApplePicking:
         print(np.shape(orientation_error))
         return orientation_error
 
+def train_all():
+    from itertools import product
+    networks = ['ANN', 'Conv1D', 'LSTM']
+    smoothing_factors = [1, 3]
+
+    for network, smooth in product(networks, smoothing_factors):
+        model = ApplePicking(network, smoothing_window=smooth)
+        model.train_network(0.10)
+
+
+
 if __name__ == '__main__':
 
     # Call, e.g. python apple_picking.py train ANN 3
@@ -297,16 +322,11 @@ if __name__ == '__main__':
     if len(sys.argv) > 3:
         smooth = int(sys.argv[3])
 
-    if network == 'ANN':
-        window_size = 1
-    elif network == 'Conv1D':
-        window_size = 10
-    elif network == 'LSTM':
-        window_size = 5
-    else:
-        raise ValueError("Invalid Network Name")
+    if mode == 'trainall':
+        train_all()
+        sys.exit(0)
 
-    apple_model = ApplePicking(network, window_size=window_size, smoothing_window=smooth)
+    apple_model = ApplePicking(network, smoothing_window=smooth)
 
     if mode == 'train':
         apple_model.train_network(0.10, n_epoch=1000)
