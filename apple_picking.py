@@ -274,6 +274,8 @@ class ApplePicking(object):
         # plt.xlabel("Data", fontsize=25)
         plt.ylabel("Angular Error (deg)", fontsize=30)
         plt.xticks(size=25)
+        plt.yticks(size=25)
+        plt.ylim([0.0, 100.0])
         plt.show()
 
     def train_network(self, val_split, n_epoch=1000, clear_tmp=True):
@@ -421,6 +423,8 @@ if __name__ == '__main__':
         # plt.xlabel("Data", fontsize=25)
         plt.ylabel("Angular Error (deg)", fontsize=30)
         plt.xticks(size=25)
+        plt.yticks(size=25)
+        plt.ylim([0.0, 100.0])
         plt.show()
         # plt.savefig(output_base.format(data_label.lower(), label.lower()))
         
